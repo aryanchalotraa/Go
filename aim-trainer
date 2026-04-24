@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"math/rand"
@@ -14,15 +15,34 @@ const (
 	screenWidth  = 800
 	screenHeight = 600
 	boxSize      = 50
+	roundTime    = 105 // seconds (1 min 45 sec)
 )
 
 type Game struct {
-	boxX  int
-	boxY  int
-	score int
+	boxX      int
+	boxY      int
+	score     int
+	bestScore int
+	startTime time.Time
+}
+
+func (g *Game) resetRound() {
+	if g.score > g.bestScore {
+		g.bestScore = g.score
+	}
+	g.score = 0
+	g.startTime = time.Now()
+	g.boxX = rand.Intn(screenWidth - boxSize)
+	g.boxY = rand.Intn(screenHeight - boxSize)
 }
 
 func (g *Game) Update() error {
+	// Time check
+	elapsed := int(time.Since(g.startTime).Seconds())
+	if elapsed >= roundTime {
+		g.resetRound()
+	}
+
 	// Move box randomly
 	if rand.Intn(60) == 0 {
 		g.boxX = rand.Intn(screenWidth - boxSize)
@@ -44,7 +64,6 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	// Background
 	screen.Fill(color.RGBA{0, 0, 0, 255})
 
 	// Draw box
@@ -55,38 +74,43 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate(float64(g.boxX), float64(g.boxY))
 	screen.DrawImage(box, op)
 
-	// Draw score
-	ebitenutil.DebugPrint(screen, "Score: "+itoa(g.score))
+	// Time remaining
+	elapsed := int(time.Since(g.startTime).Seconds())
+	remaining := roundTime - elapsed
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	min := remaining / 60
+	sec := remaining % 60
+
+	// Display info
+	info := fmt.Sprintf(
+		"Score: %d\nBest: %d\nTime: %02d:%02d",
+		g.score,
+		g.bestScore,
+		min,
+		sec,
+	)
+
+	ebitenutil.DebugPrint(screen, info)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return screenWidth, screenHeight
 }
 
-// Simple int to string (avoids extra import)
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	digits := ""
-	for n > 0 {
-		d := n % 10
-		digits = string(rune('0'+d)) + digits
-		n /= 10
-	}
-	return digits
-}
-
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	game := &Game{
-		boxX: rand.Intn(screenWidth - boxSize),
-		boxY: rand.Intn(screenHeight - boxSize),
+		startTime: time.Now(),
+		boxX:      rand.Intn(screenWidth - boxSize),
+		boxY:      rand.Intn(screenHeight - boxSize),
 	}
 
 	ebiten.SetWindowSize(screenWidth, screenHeight)
-	ebiten.SetWindowTitle("Click the Box Game")
+	ebiten.SetWindowTitle("Click the Box - Timed Mode")
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
