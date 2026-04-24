@@ -1,0 +1,150 @@
+package main
+
+import (
+	"fmt"
+	"image/color"
+	"log"
+	"math/rand"
+	"time"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+)
+
+const (
+	screenWidth  = 400
+	screenHeight = 600
+
+	carWidth  = 40
+	carHeight = 80
+)
+
+type Car struct {
+	x, y float64
+}
+
+type Game struct {
+	player   Car
+	enemies  []Car
+	score    int
+	speed    float64
+	gameOver bool
+}
+
+func (g *Game) reset() {
+	g.player = Car{x: screenWidth/2 - carWidth/2, y: screenHeight - 100}
+	g.enemies = []Car{}
+	g.score = 0
+	g.speed = 3
+	g.gameOver = false
+}
+
+func (g *Game) Update() error {
+	if g.gameOver {
+		if ebiten.IsKeyPressed(ebiten.KeyR) {
+			g.reset()
+		}
+		return nil
+	}
+
+	// Player movement
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		g.player.x -= 5
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		g.player.x += 5
+	}
+
+	// Boundaries
+	if g.player.x < 0 {
+		g.player.x = 0
+	}
+	if g.player.x > screenWidth-carWidth {
+		g.player.x = screenWidth - carWidth
+	}
+
+	// Spawn enemies
+	if rand.Intn(60) == 0 {
+		x := rand.Float64() * (screenWidth - carWidth)
+		g.enemies = append(g.enemies, Car{x: x, y: -carHeight})
+	}
+
+	// Move enemies
+	for i := range g.enemies {
+		g.enemies[i].y += g.speed
+	}
+
+	// Collision detection
+	for _, e := range g.enemies {
+		if g.player.x < e.x+carWidth &&
+			g.player.x+carWidth > e.x &&
+			g.player.y < e.y+carHeight &&
+			g.player.y+carHeight > e.y {
+			g.gameOver = true
+		}
+	}
+
+	// Remove off-screen enemies
+	var active []Car
+	for _, e := range g.enemies {
+		if e.y < screenHeight {
+			active = append(active, e)
+		} else {
+			g.score++
+		}
+	}
+	g.enemies = active
+
+	// Increase difficulty
+	if g.score%10 == 0 {
+		g.speed += 0.01
+	}
+
+	return nil
+}
+
+func (g *Game) Draw(screen *ebiten.Image) {
+	screen.Fill(color.RGBA{20, 20, 20, 255})
+
+	// Player car (green)
+	playerImg := ebiten.NewImage(carWidth, carHeight)
+	playerImg.Fill(color.RGBA{0, 255, 0, 255})
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(g.player.x, g.player.y)
+	screen.DrawImage(playerImg, op)
+
+	// Enemy cars (red)
+	for _, e := range g.enemies {
+		enemyImg := ebiten.NewImage(carWidth, carHeight)
+		enemyImg.Fill(color.RGBA{255, 0, 0, 255})
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(e.x, e.y)
+		screen.DrawImage(enemyImg, op)
+	}
+
+	// Score display
+	msg := fmt.Sprintf("Score: %d", g.score)
+	if g.gameOver {
+		msg += "\nGAME OVER\nPress R to Restart"
+	}
+
+	ebitenutil.DebugPrint(screen, msg)
+}
+
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	return screenWidth, screenHeight
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	game := &Game{}
+	game.reset()
+
+	ebiten.SetWindowSize(screenWidth, screenHeight)
+	ebiten.SetWindowTitle("Driving Game")
+
+	if err := ebiten.RunGame(game); err != nil {
+		log.Fatal(err)
+	}
+}
