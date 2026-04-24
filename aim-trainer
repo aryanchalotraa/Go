@@ -1,0 +1,94 @@
+package main
+
+import (
+	"image/color"
+	"log"
+	"math/rand"
+	"time"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+)
+
+const (
+	screenWidth  = 800
+	screenHeight = 600
+	boxSize      = 50
+)
+
+type Game struct {
+	boxX  int
+	boxY  int
+	score int
+}
+
+func (g *Game) Update() error {
+	// Move box randomly
+	if rand.Intn(60) == 0 {
+		g.boxX = rand.Intn(screenWidth - boxSize)
+		g.boxY = rand.Intn(screenHeight - boxSize)
+	}
+
+	// Mouse click detection
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		if x >= g.boxX && x <= g.boxX+boxSize &&
+			y >= g.boxY && y <= g.boxY+boxSize {
+			g.score++
+			g.boxX = rand.Intn(screenWidth - boxSize)
+			g.boxY = rand.Intn(screenHeight - boxSize)
+		}
+	}
+
+	return nil
+}
+
+func (g *Game) Draw(screen *ebiten.Image) {
+	// Background
+	screen.Fill(color.RGBA{0, 0, 0, 255})
+
+	// Draw box
+	box := ebiten.NewImage(boxSize, boxSize)
+	box.Fill(color.RGBA{255, 0, 0, 255})
+
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(float64(g.boxX), float64(g.boxY))
+	screen.DrawImage(box, op)
+
+	// Draw score
+	ebitenutil.DebugPrint(screen, "Score: "+itoa(g.score))
+}
+
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	return screenWidth, screenHeight
+}
+
+// Simple int to string (avoids extra import)
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	digits := ""
+	for n > 0 {
+		d := n % 10
+		digits = string(rune('0'+d)) + digits
+		n /= 10
+	}
+	return digits
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	game := &Game{
+		boxX: rand.Intn(screenWidth - boxSize),
+		boxY: rand.Intn(screenHeight - boxSize),
+	}
+
+	ebiten.SetWindowSize(screenWidth, screenHeight)
+	ebiten.SetWindowTitle("Click the Box Game")
+
+	if err := ebiten.RunGame(game); err != nil {
+		log.Fatal(err)
+	}
+}
